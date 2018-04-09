@@ -36,13 +36,20 @@ def getAllData():
 	YTrain = np.concatenate((YTrain1,YTrain2,YTrain3,YTrain4,YTrain5), axis=1)
 	yTrain = np.concatenate((yTrain1,yTrain2,yTrain3,yTrain4,yTrain5), axis=0)
 
+	numVal = 1000
 	xValidate, YValidate, yValidate = loadBatch("test_batch")
+	xValidate= xValidate[:,0:numVal]
+	YValidate= YValidate[:,0:numVal]
+	yValidate= yValidate[0:numVal]
 
 	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate
 
-def getInitData(X,Y):
-	W = np.matrix([[np.random.normal(0,0.01) for d in range(X.shape[0])] for K in range(Y.shape[0])])
-	b = np.matrix([[np.random.normal(0,0.01)] for K in range(Y.shape[0])])
+def getInitData(X,Y, Xavier=False):
+	var = 0.01
+	if Xavier:
+		var = 1/X.shape[0]
+	W = np.matrix([[np.random.normal(0,var) for d in range(X.shape[0])] for K in range(Y.shape[0])])
+	b = np.matrix([[np.random.normal(0,var)] for K in range(Y.shape[0])])
 	return W, b
 
 def evaluateClassifier(X,W,b):
@@ -60,11 +67,41 @@ def getLCross(Y, P):
 def computeCost(X, Y, W, b, lamda):
 	P = evaluateClassifier(X,W,b)
 	lCross = getLCross(Y,P)
-	L2 = 0.0
-	for i in range(W.shape[0]):
-		for j in range(W.shape[1]):
-			L2 += W[i,j]**2
+	L2 = np.sum(np.power(W,2))
 	return (lCross/X.shape[1] + lamda*L2).item(0)
+
+def computeSVMCost(X, y, W, b, lamda):
+	total = 0.0
+	for i in range(X.shape[1]):
+		scores = W*X[:,i:i+1] + b
+		correctScore = scores[y[i]]
+		for j in range(scores.shape[0]):
+			if j == y[i]:
+				continue
+			total += max(0, scores[j] - correctScore + 1)
+	L2 = np.sum(np.power(W,2))
+	return (total/X.shape[1] + lamda*L2).item(0)
+
+def computeSVMGradients(X, y, W, b, lamda):
+	gradB = np.zeros((W.shape[0], 1))
+	gradW = np.zeros(W.shape)
+
+	for i in range(X.shape[1]):
+		scores = W*X[:,i:i+1] + b
+		correctScore = scores[y[i]]
+		for j in range(scores.shape[0]):
+			if j == y[i]:
+				continue
+			margin = scores[j] - correctScore + 1
+			if margin > 0:
+				gradW[y[i]] -= X[:,i]
+				gradW[j] += X[:,i]
+				gradB[j] += 1.0
+				gradB[y[i]] -= 1.0
+	gradW /= X.shape[1]
+	gradB /= X.shape[1]
+	gradW += 2*lamda*W
+	return gradW, gradB
 
 def computeAccuracy(X, y, W, b):
 	P = evaluateClassifier(X,W,b)
@@ -74,9 +111,9 @@ def computeAccuracy(X, y, W, b):
 			corrects+=1
 	return corrects/len(y)
 
-def computeGradients(X, Y, W, lamda):
+def computeGradients(X, Y, W, b, lamda):
 	P = evaluateClassifier(X,W,b)
-	g = -(Y-P)
+	g = P-Y
 	gradB = np.zeros((Y.shape[0], 1))
 	gradW = np.zeros(W.shape)
 	for i in range(g.shape[1]):
@@ -87,21 +124,52 @@ def computeGradients(X, Y, W, lamda):
 	gradW += 2*lamda*W
 	return gradW, gradB
 
+def computeGradsNum(X, Y, W, b, lamda, h):
+	no = W.shape[0]
+	d = X.shape[0]
+
+	gradW = np.zeros(W.shape)
+	gradB = np.zeros((no, 1))
+
+	c = computeSVMCost(X, Y, W, b, lamda)
+
+	for i in range(b.shape[0]):
+		bTry = b.copy()
+		bTry[i] += h
+		c2 = computeSVMCost(X, Y, W, bTry, lamda)
+		gradB[i] = (c2-c)/h
+
+	for i in range(W.shape[0]):
+		for j in range(W.shape[1]):
+			WTry = W.copy()
+			WTry[i,j] += h
+			c2 = computeSVMCost(X, Y, WTry, b, lamda)
+			gradW[i,j] = (c2-c)/h
+
+	return gradW, gradB
+
 def updateNetwork(X, Y, GDparams, W, b, lamda):
-	gradW, gradB = computeGradients(X, Y, W, lamda)
+	gradW, gradB = computeGradients(X, Y, W, b, lamda)
 	W -= GDparams[1]*gradW
 	b -= GDparams[1]*gradB
 
-def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV):
+def updateNetworkSVM(X, y, GDparams, W, b, lamda):
+	gradW, gradB = computeSVMGradients(X, y, W, b, lamda)
+	W -= GDparams[1]*gradW
+	b -= GDparams[1]*gradB
+
+def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, earlyStop=False):
 
 	costTrain = [0.0]*GDparams[2]
 	accTrain = [0.0]*GDparams[2]
 	costVal = [0.0]*GDparams[2]
 	accVal = [0.0]*GDparams[2]
 
+	stoppedAt = 0
 	for epoch in range(GDparams[2]):
-		print(epoch)
-		for i in range(1, math.floor(len(X)/GDparams[0])):
+		print(epoch+1)
+		stoppedAt = epoch + 1
+		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
 			start = (i-1)*GDparams[0]
 			end = i*GDparams[0]
 			XBatch = X[:,start:end]
@@ -111,11 +179,63 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV):
 		accTrain[epoch] = computeAccuracy(X, y, W, b)
 		costVal[epoch] = computeCost(XV, YV, W, b, lamda)
 		accVal[epoch] = computeAccuracy(XV, yV, W, b)
-	plt.plot(costTrain)
-	plt.plot(costVal)
+		if earlyStop and epoch > 0 and costVal[epoch - 1] < costVal[epoch]:
+			break
+	labels = []
+	labels.append(plt.plot(costTrain[0:stoppedAt], label="Training")[0])
+	labels.append(plt.plot(costVal[0:stoppedAt], label="Validation")[0])
+	plt.legend(handles=labels)
+	plt.title("Cross entropy cost")
+	plt.ylabel("Cost")
+	plt.xlabel("Epoch")
 	plt.show()
-	plt.plot(accTrain)
-	plt.plot(accVal)
+	labels = []
+	labels.append(plt.plot(accTrain[0:stoppedAt], label="Training")[0])
+	labels.append(plt.plot(accVal[0:stoppedAt], label="Validation")[0])
+	plt.legend(handles=labels)
+	plt.title("Cross entropy Accuracy")
+	plt.ylabel("Accuracy")
+	plt.xlabel("Epoch")
+	plt.show()
+
+def miniBatchGDSVM(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, earlyStop=False):
+
+	costTrain = [0.0]*GDparams[2]
+	accTrain = [0.0]*GDparams[2]
+	costVal = [0.0]*GDparams[2]
+	accVal = [0.0]*GDparams[2]
+
+	stoppedAt = 0
+	for epoch in range(GDparams[2]):
+		print(epoch+1)
+		stoppedAt = epoch + 1
+		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
+			start = (i-1)*GDparams[0]
+			end = i*GDparams[0]
+			XBatch = X[:,start:end]
+			yBatch = y[start:end]
+			updateNetworkSVM(XBatch, yBatch, GDparams, W, b, lamda)
+		costTrain[epoch] = computeSVMCost(X, y, W, b, lamda)
+		accTrain[epoch] = computeAccuracy(X, y, W, b)
+		costVal[epoch] = computeSVMCost(XV, yV, W, b, lamda)
+		accVal[epoch] = computeAccuracy(XV, yV, W, b)
+		if earlyStop and epoch > 0 and costVal[epoch - 1] < costVal[epoch]:
+			break
+	labels = []
+	labels.append(plt.plot(costTrain[0:stoppedAt], label="Training")[0])
+	labels.append(plt.plot(costVal[0:stoppedAt], label="Validation")[0])
+	plt.legend(handles=labels)
+	plt.title("SVM cost")
+	plt.ylabel("Cost")
+	plt.xlabel("Epoch")
+	plt.show()
+	labels = []
+	labels.append(plt.plot(accTrain[0:stoppedAt], label="Training")[0])
+	labels.append(plt.plot(accVal[0:stoppedAt], label="Validation")[0])
+	plt.legend(handles=labels)
+	plt.title("SVM Accuracy")
+	plt.ylabel("Accuracy")
+	plt.xlabel("Epoch")
 	plt.show()
 
 def printW(W):
@@ -130,11 +250,35 @@ def printW(W):
 		ax[k].set_yticks(())
 	plt.show()
 
-lamda = 0.0
-GDparams = [100, 0.01, 40]
-X, Y, y, XValidate, YValidate, yValidate = getAllData()
-W, b = getInitData(X,Y)
-miniBatchGD(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate)
+def checkGradTest():
+	X, Y, y = loadBatch("data_batch_1")
+	n = 10
+	X = X[:,0:n]
+	Y = Y[:,0:n]
+	y = y[0:n]
+	W, b = getInitData(X,Y)
+	lamda = 0.0
+	analW, analB = computeSVMGradients(X, y, W, b, lamda)
+	numW, numB = computeGradsNum(X, y, W, b, lamda, 1e-06)
+	wError = np.max(abs(analW - numW) / np.clip(abs(analW) + abs(numW), a_min=1e-06, a_max=9999))
+	bError = np.max(abs(analB - numB) / np.clip(abs(analB) + abs(numB), a_min=1e-06, a_max=9999))
+	print("W = " + str(wError))
+	print("b = " + str(bError))
+
+	print("W = " + str(np.max(abs(analW - numW))))
+	print("b = " + str(np.max(abs(analB - numB))))
+
+#checkGradTest()
+
+def test():
+	lamda = 0.0
+	GDparams = [100, 0.005, 20]
+	X, Y, y, XValidate, YValidate, yValidate = getAllData()
+	W, b = getInitData(X,Y, Xavier=True)
+	miniBatchGDSVM(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, earlyStop=False)
+
+test()
+
 #printW(W)
 
 #imgShow(file[b"data"][np.random.randint(0, len(file[b"data"]))].T)
