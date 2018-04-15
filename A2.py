@@ -63,25 +63,25 @@ def normalizationInput(train, validation, test):
 
 def getSomeData():
 	xTrain, YTrain, yTrain = loadBatch("data_batch_1")
-
-	n = 100
+	'''
+	n = 1000
 	nO = int(n/4)
 	xTrain = xTrain[:,0:n]
 	YTrain = YTrain[:,0:n]
 	yTrain = yTrain[0:n]
-
+	'''
 	xValidate, YValidate, yValidate = loadBatch("data_batch_2")
-
+	'''
 	xValidate = xValidate[:,0:nO]
 	YValidate = YValidate[:,0:nO]
 	yValidate = yValidate[0:nO]
-
+	'''
 	xTest, YTest, yTest = loadBatch("test_batch")
-
+	'''
 	xTest = xTest[:,0:nO]
 	YTest = YTest[:,0:nO]
 	yTest = yTest[0:nO]
-
+	'''
 	xTrain, xValidate, xTest = normalizationInput(xTrain, xValidate, xTest)
 
 	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate, xTest, YTest, yTest
@@ -208,15 +208,19 @@ def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
 
 	return gradW1, gradB1, gradW2, gradB2
 
-def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda):
+def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda, momentum):
 	gradW1, gradB1, gradW2, gradB2 = computeGradients(X, Y, W1, b1, W2, b2, lamda)
-	W1 -= GDparams[1]*gradW1
-	b1 -= GDparams[1]*gradB1
-	W2 -= GDparams[1]*gradW2
-	b2 -= GDparams[1]*gradB2
+	momentum[0] = GDparams[4]*momentum[0] + GDparams[1]*gradW1
+	momentum[1] = GDparams[4]*momentum[1] + GDparams[1]*gradB1
+	momentum[2] = GDparams[4]*momentum[2] + GDparams[1]*gradW2
+	momentum[3] = GDparams[4]*momentum[3] + GDparams[1]*gradB2
+	W1 -= momentum[0]
+	b1 -= momentum[1]
+	W2 -= momentum[2]
+	b2 -= momentum[3]
 	GDparams[1] *= GDparams[3] #Decay eta
 
-def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, earlyStop=False):
+def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, earlyStop=False):
 
 	costTrain = [0.0]*GDparams[2]
 	accTrain = [0.0]*GDparams[2]
@@ -231,7 +235,7 @@ def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, earlyStop=
 			end = i*GDparams[0]
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
-			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda)
+			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
 		costTrain[epoch] = computeCost(X, Y, y, W1, b1, W2, b2, lamda)
 		accTrain[epoch] = computeAccuracy(X, y, W1, b1, W2, b2)
 		costVal[epoch] = computeCost(XV, YV, yV, W1, b1, W2, b2, lamda)
@@ -286,13 +290,73 @@ def checkGradTest():
 	print("W2 = " + str(np.max(abs(analW2 - numW2))))
 	print("b2 = " + str(np.max(abs(analB2 - numB2))))
 
+def initMomentum(W1, b1, W2, b2):
+	W1M = np.zeros(W1.shape)
+	W2M = np.zeros(W2.shape)
+	b1M = np.zeros(b1.shape)
+	b2M = np.zeros(b2.shape)
+	return [W1M, b1M, W2M, b2M]
+
+def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
+	for epoch in range(GDparams[2]):
+		stoppedAt = epoch + 1
+		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
+			start = (i-1)*GDparams[0]
+			end = i*GDparams[0]
+			XBatch = X[:,start:end]
+			YBatch = Y[:,start:end]
+			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
+
+def paramerTest():
+
+	nIters = 100
+
+	valAcc = [0.0]*nIters
+	parameters  = [0.0, 0.0]*nIters
+	bestAcc = [0,0,0]
+	bestId = [0,0,0]
+
+	GDparams = [100, 0, 10, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
+
+	for i in range(nIters):
+		eta = 10**((-2 + (-0.25 + 2)*np.random.random()))
+		lamda = 10**((-3 + (-1 + 3)*np.random.random()))
+		GDparams[1] = eta
+
+		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
+		momentum = initMomentum(W1, b1, W2, b2)
+
+		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum)
+		valAcc[i] = computeAccuracy(XValidate, yValidate, W1, b1, W2, b2)
+		parameters[i] = [lamda, eta]
+		progressPrint(i , nIters)
+	sys.stdout.write('\r'+"100%  ")
+	sys.stdout.flush()
+	print("")
+
+	for i in range(nIters):
+		argMin = np.argmin(bestAcc)
+		if valAcc[i] > bestAcc[argMin]:
+			bestAcc[argMin] = valAcc[i]
+			bestId[argMin] = i
+
+	with open("parameters", "w") as f:
+		for i in range(nIters):
+			addOn = ""
+			if i in bestId:
+				addOn = " < Done good"
+			f.write("Accuarcy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
+
 
 def test():
-	lamda = 0.0
-	GDparams = [50, 0.01, 500, 0.95]
+	lamda = 0.1
+	GDparams = [10, 0.1, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
-	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, earlyStop=False)
+	momentum = initMomentum(W1, b1, W2, b2)
+	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=False)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2))
 
 def progressPrint(nominator, denominator):
@@ -304,4 +368,8 @@ def progressPrint(nominator, denominator):
 		sys.stdout.flush()
 
 #checkGradTest()
-test()
+#test()
+
+paramerTest()
+
+#Eta 0.01 - 0.6
