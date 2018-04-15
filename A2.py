@@ -218,7 +218,6 @@ def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda, momentum):
 	b1 -= momentum[1]
 	W2 -= momentum[2]
 	b2 -= momentum[3]
-	GDparams[1] *= GDparams[3] #Decay eta
 
 def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, earlyStop=False):
 
@@ -236,6 +235,7 @@ def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, 
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
 			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
+		GDparams[1] *= GDparams[3] #Decay eta
 		costTrain[epoch] = computeCost(X, Y, y, W1, b1, W2, b2, lamda)
 		accTrain[epoch] = computeAccuracy(X, y, W1, b1, W2, b2)
 		costVal[epoch] = computeCost(XV, YV, yV, W1, b1, W2, b2, lamda)
@@ -306,8 +306,9 @@ def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
 			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
+		GDparams[1] *= GDparams[3] #Decay eta
 
-def paramerTest():
+def parameterTest():
 
 	nIters = 100
 
@@ -321,8 +322,8 @@ def paramerTest():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 
 	for i in range(nIters):
-		eta = 10**((-2 + (-0.25 + 2)*np.random.random()))
-		lamda = 10**((-3 + (-1 + 3)*np.random.random()))
+		eta = 10**((-3 + (-1 + 3)*np.random.random()))
+		lamda = 10**((-4 + (-1 + 4)*np.random.random()))
 		GDparams[1] = eta
 
 		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
@@ -349,6 +350,46 @@ def paramerTest():
 				addOn = " < Done good"
 			f.write("Accuarcy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
 
+def fineSearch():
+	nIters = 100
+
+	valAcc = [0.0]*nIters
+	parameters  = [0.0, 0.0]*nIters
+	bestAcc = [0,0,0]
+	bestId = [0,0,0]
+
+	GDparams = [100, 0, 10, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
+
+	for i in range(nIters):
+		eta = ((0.015 + (0.035 - 0.015)*np.random.random()))
+		lamda = ((0.0005 + (0.002 - 0.0005)*np.random.random()))
+		GDparams[1] = eta
+
+		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
+		momentum = initMomentum(W1, b1, W2, b2)
+
+		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum)
+		valAcc[i] = computeAccuracy(XValidate, yValidate, W1, b1, W2, b2)
+		parameters[i] = [lamda, eta]
+		progressPrint(i , nIters)
+	sys.stdout.write('\r'+"100%  ")
+	sys.stdout.flush()
+	print("")
+
+	for i in range(nIters):
+		argMin = np.argmin(bestAcc)
+		if valAcc[i] > bestAcc[argMin]:
+			bestAcc[argMin] = valAcc[i]
+			bestId[argMin] = i
+
+	with open("fineSearch", "w") as f:
+		for i in range(nIters):
+			addOn = ""
+			if i in bestId:
+				addOn = " < Done good"
+			f.write("Accuarcy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
 
 def test():
 	lamda = 0.1
@@ -369,7 +410,5 @@ def progressPrint(nominator, denominator):
 
 #checkGradTest()
 #test()
-
-paramerTest()
-
-#Eta 0.01 - 0.6
+#parameterTest()
+fineSearch()
