@@ -1,3 +1,5 @@
+#Jonathan Rinnarv - 9301213634 - rinnarv@kth.se
+
 import numpy as np
 import math
 from matplotlib import pyplot as plt
@@ -37,12 +39,32 @@ def getAllData():
 	yTrain = np.concatenate((yTrain1,yTrain2,yTrain3,yTrain4,yTrain5), axis=0)
 
 	numVal = 1000
-	xValidate, YValidate, yValidate = loadBatch("test_batch")
-	xValidate= xValidate[:,0:numVal]
-	YValidate= YValidate[:,0:numVal]
-	yValidate= yValidate[0:numVal]
+	xValidate= xTrain[:,0:numVal]
+	YValidate= YTrain[:,0:numVal]
+	yValidate= yTrain[0:numVal]
 
-	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate
+	xTrain= xTrain[:,numVal:]
+	YTrain= YTrain[:,numVal:]
+	yTrain= yTrain[numVal:]
+
+	xTest, YTest, yTest = loadBatch("test_batch")
+
+	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate, xTest, YTest, yTest
+
+def getSomeData():
+	xTrain, YTrain, yTrain = loadBatch("data_batch_1")
+	numVal = 1000
+	xValidate= xTrain[:,0:numVal]
+	YValidate= YTrain[:,0:numVal]
+	yValidate= yTrain[0:numVal]
+
+	xTrain= xTrain[:,numVal:]
+	YTrain= YTrain[:,numVal:]
+	yTrain= yTrain[numVal:]
+
+	xTest, YTest, yTest = loadBatch("test_batch")
+
+	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate, xTest, YTest, yTest
 
 def getInitData(X,Y, Xavier=False):
 	var = 0.01
@@ -131,19 +153,19 @@ def computeGradsNum(X, Y, W, b, lamda, h):
 	gradW = np.zeros(W.shape)
 	gradB = np.zeros((no, 1))
 
-	c = computeSVMCost(X, Y, W, b, lamda)
+	c = computeCost(X, Y, W, b, lamda)
 
 	for i in range(b.shape[0]):
 		bTry = b.copy()
 		bTry[i] += h
-		c2 = computeSVMCost(X, Y, W, bTry, lamda)
+		c2 = computeCost(X, Y, W, bTry, lamda)
 		gradB[i] = (c2-c)/h
 
 	for i in range(W.shape[0]):
 		for j in range(W.shape[1]):
 			WTry = W.copy()
 			WTry[i,j] += h
-			c2 = computeSVMCost(X, Y, WTry, b, lamda)
+			c2 = computeCost(X, Y, WTry, b, lamda)
 			gradW[i,j] = (c2-c)/h
 
 	return gradW, gradB
@@ -179,7 +201,7 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, earlyStop=False):
 		accTrain[epoch] = computeAccuracy(X, y, W, b)
 		costVal[epoch] = computeCost(XV, YV, W, b, lamda)
 		accVal[epoch] = computeAccuracy(XV, yV, W, b)
-		if earlyStop and epoch > 0 and costVal[epoch - 1] < costVal[epoch]:
+		if earlyStop and epoch > 5 and (costVal[epoch - 1] - costVal[epoch]) < 0.0001:
 			break
 	labels = []
 	labels.append(plt.plot(costTrain[0:stoppedAt], label="Training")[0])
@@ -219,7 +241,7 @@ def miniBatchGDSVM(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, earlyStop=False):
 		accTrain[epoch] = computeAccuracy(X, y, W, b)
 		costVal[epoch] = computeSVMCost(XV, yV, W, b, lamda)
 		accVal[epoch] = computeAccuracy(XV, yV, W, b)
-		if earlyStop and epoch > 0 and costVal[epoch - 1] < costVal[epoch]:
+		if earlyStop and epoch > 5 and (costVal[epoch - 1] - costVal[epoch]) < 0.0001:
 			break
 	labels = []
 	labels.append(plt.plot(costTrain[0:stoppedAt], label="Training")[0])
@@ -258,8 +280,8 @@ def checkGradTest():
 	y = y[0:n]
 	W, b = getInitData(X,Y)
 	lamda = 0.0
-	analW, analB = computeSVMGradients(X, y, W, b, lamda)
-	numW, numB = computeGradsNum(X, y, W, b, lamda, 1e-06)
+	analW, analB = computeGradients(X, Y, W, b, lamda)
+	numW, numB = computeGradsNum(X, Y, W, b, lamda, 1e-06)
 	wError = np.max(abs(analW - numW) / np.clip(abs(analW) + abs(numW), a_min=1e-06, a_max=9999))
 	bError = np.max(abs(analB - numB) / np.clip(abs(analB) + abs(numB), a_min=1e-06, a_max=9999))
 	print("W = " + str(wError))
@@ -271,14 +293,12 @@ def checkGradTest():
 #checkGradTest()
 
 def test():
-	lamda = 0.0
-	GDparams = [100, 0.005, 20]
-	X, Y, y, XValidate, YValidate, yValidate = getAllData()
+	lamda = 0.1
+	GDparams = [100, 0.001, 40]
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	W, b = getInitData(X,Y, Xavier=True)
-	miniBatchGDSVM(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, earlyStop=False)
+	miniBatchGDSVM(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, earlyStop=True)
+	print(computeAccuracy(xTest, yTest, W, b))
+	#printW(W)
 
 test()
-
-#printW(W)
-
-#imgShow(file[b"data"][np.random.randint(0, len(file[b"data"]))].T)
