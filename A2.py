@@ -363,8 +363,8 @@ def fineSearch():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 
 	for i in range(nIters):
-		eta = ((0.015 + (0.035 - 0.015)*np.random.random()))
-		lamda = ((0.0005 + (0.002 - 0.0005)*np.random.random()))
+		eta = ((0.015 + (0.055 - 0.015)*np.random.random()))
+		lamda = ((0.0001 + (0.002 - 0.0001)*np.random.random()))
 		GDparams[1] = eta
 
 		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
