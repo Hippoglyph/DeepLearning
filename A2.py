@@ -334,10 +334,10 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName):
 			f.write("Accuracy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
 
 def test():
-	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-	lamda = 0.00049
-	GDparams = [100, 0.02573, 10, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
-	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getAllData()
+	lamda = 0.001 #Best lambda 0.00049
+	GDparams = [100, 0.02573, 30, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	W1, b1, W2, b2 = getInitData(X, Y, 150, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
 	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2))
@@ -354,3 +354,8 @@ def progressPrint(nominator, denominator):
 test()
 #parameterTest(-3, -1, -4, -1, "parameters")
 #parameterTest(-1.8, -1.25, -4, -2.7, "fineSearch")
+
+#Best lambda  = 0.00049
+#Best Eta = 0.02573
+
+#150 hidden 51.98 %
