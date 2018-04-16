@@ -63,33 +63,16 @@ def normalizationInput(train, validation, test):
 
 def getSomeData():
 	xTrain, YTrain, yTrain = loadBatch("data_batch_1")
-	'''
-	n = 1000
-	nO = int(n/4)
-	xTrain = xTrain[:,0:n]
-	YTrain = YTrain[:,0:n]
-	yTrain = yTrain[0:n]
-	'''
 	xValidate, YValidate, yValidate = loadBatch("data_batch_2")
-	'''
-	xValidate = xValidate[:,0:nO]
-	YValidate = YValidate[:,0:nO]
-	yValidate = yValidate[0:nO]
-	'''
 	xTest, YTest, yTest = loadBatch("test_batch")
-	'''
-	xTest = xTest[:,0:nO]
-	YTest = YTest[:,0:nO]
-	yTest = yTest[0:nO]
-	'''
 	xTrain, xValidate, xTest = normalizationInput(xTrain, xValidate, xTest)
 
 	return xTrain, YTrain, yTrain, xValidate, YValidate, yValidate, xTest, YTest, yTest
 
-def getInitData(X,Y, hiddenNumber, Xavier=False):
+def getInitData(X,Y, hiddenNumber, He=False):
 	var = 0.001
-	if Xavier:
-		var = 1/X.shape[0]
+	if He:
+		var = 2/X.shape[0]
 	W1 = np.matrix([[np.random.normal(0,var) for d in range(X.shape[0])] for K in range(hiddenNumber)])
 	b1 = np.matrix([[np.random.normal(0,var)] for K in range(hiddenNumber)])
 	W2 = np.matrix([[np.random.normal(0,var) for d in range(hiddenNumber)] for K in range(Y.shape[0])])
@@ -308,7 +291,7 @@ def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
 			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
 		GDparams[1] *= GDparams[3] #Decay eta
 
-def parameterTest():
+def parameterTest(e_min, e_max, l_min, l_max, fileName):
 
 	nIters = 100
 
@@ -322,8 +305,8 @@ def parameterTest():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 
 	for i in range(nIters):
-		eta = 10**((-3 + (-1 + 3)*np.random.random()))
-		lamda = 10**((-4 + (-1 + 4)*np.random.random()))
+		eta = 10**((e_min + (e_max - e_min)*np.random.random()))
+		lamda = 10**((l_min + (l_max - l_min)*np.random.random()))
 		GDparams[1] = eta
 
 		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
@@ -343,61 +326,20 @@ def parameterTest():
 			bestAcc[argMin] = valAcc[i]
 			bestId[argMin] = i
 
-	with open("parameters", "w") as f:
+	with open("fileName", "w") as f:
 		for i in range(nIters):
 			addOn = ""
 			if i in bestId:
 				addOn = " < Done good"
-			f.write("Accuarcy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
-
-def fineSearch():
-	nIters = 100
-
-	valAcc = [0.0]*nIters
-	parameters  = [0.0, 0.0]*nIters
-	bestAcc = [0,0,0]
-	bestId = [0,0,0]
-
-	GDparams = [100, 0, 10, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
-
-	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-
-	for i in range(nIters):
-		eta = ((0.015 + (0.055 - 0.015)*np.random.random()))
-		lamda = ((0.0001 + (0.002 - 0.0001)*np.random.random()))
-		GDparams[1] = eta
-
-		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
-		momentum = initMomentum(W1, b1, W2, b2)
-
-		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum)
-		valAcc[i] = computeAccuracy(XValidate, yValidate, W1, b1, W2, b2)
-		parameters[i] = [lamda, eta]
-		progressPrint(i , nIters)
-	sys.stdout.write('\r'+"100%  ")
-	sys.stdout.flush()
-	print("")
-
-	for i in range(nIters):
-		argMin = np.argmin(bestAcc)
-		if valAcc[i] > bestAcc[argMin]:
-			bestAcc[argMin] = valAcc[i]
-			bestId[argMin] = i
-
-	with open("fineSearch", "w") as f:
-		for i in range(nIters):
-			addOn = ""
-			if i in bestId:
-				addOn = " < Done good"
-			f.write("Accuarcy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
+			f.write("Accuracy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
 
 def test():
-	lamda = 0.1
-	GDparams = [10, 0.1, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-	W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
+	lamda = 0.00049
+	GDparams = [100, 0.02573, 10, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
-	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=False)
+	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2))
 
 def progressPrint(nominator, denominator):
@@ -409,6 +351,6 @@ def progressPrint(nominator, denominator):
 		sys.stdout.flush()
 
 #checkGradTest()
-#test()
-#parameterTest()
-fineSearch()
+test()
+#parameterTest(-3, -1, -4, -1, "parameters")
+#parameterTest(-1.8, -1.25, -4, -2.7, "fineSearch")
