@@ -326,7 +326,7 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName, Sigmoid=False):
 		lamda = 10**((l_min + (l_max - l_min)*np.random.random()))
 		GDparams[1] = eta
 
-		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
+		W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 		momentum = initMomentum(W1, b1, W2, b2)
 
 		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum, Sigmoid)
@@ -343,7 +343,7 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName, Sigmoid=False):
 			bestAcc[argMin] = valAcc[i]
 			bestId[argMin] = i
 
-	with open("fileName", "w") as f:
+	with open(filename, "w") as f:
 		for i in range(nIters):
 			addOn = ""
 			if i in bestId:
@@ -352,7 +352,7 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName, Sigmoid=False):
 
 def test():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-	lamda = 0.001 #Best lambda 0.00049
+	lamda = 0.00049 #Best lambda 0.00049 Eta 0.02573
 	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
@@ -361,11 +361,11 @@ def test():
 
 def testSig():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-	lamda = 0.001 #Best lambda 0.00049
-	GDparams = [100, 0.001, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	lamda = 0.00017 #Best lambda 0.00017 Eta 0.08956
+	GDparams = [100, 0.08956, 40, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
-	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True, Sigmoid=True)
+	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=False, Sigmoid=True)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2, Sigmoid=True))
 
 def progressPrint(nominator, denominator):
