@@ -79,13 +79,23 @@ def getInitData(X,Y, hiddenNumber, He=False):
 	b2 = np.matrix([[np.random.normal(0,var)] for K in range(Y.shape[0])])
 	return W1, b1, W2, b2
 
-def evaluateClassifier(X,W1,b1,W2,b2):
+def evaluateClassifier(X,W1,b1,W2,b2, Sigmoid=False):
 	s1 = W1*X + b1
-	h = np.maximum(s1, 0)
+	if (Sigmoid):
+		h = sigmoid(s1)
+	else:
+		h = np.maximum(s1, 0)
 	s = W2*h + b2
 	sExp = np.exp(s)
 	p = sExp/sum(sExp)
 	return p, h, s1
+
+def sigmoid(X):
+	return 1/(1+np.exp(-X))
+
+def sigDerivative(X):
+	newX = np.array(X)
+	return newX*(1-newX)
 
 def getLCross(y, P):
 	lCross = 0.0
@@ -93,22 +103,22 @@ def getLCross(y, P):
 		lCross -= np.log(P[y[i],i])
 	return lCross
 
-def computeCost(X, Y, y, W1, b1, W2, b2, lamda):
-	P,_,_ = evaluateClassifier(X,W1,b1,W2,b2)
+def computeCost(X, Y, y, W1, b1, W2, b2, lamda, Sigmoid=False):
+	P,_,_ = evaluateClassifier(X,W1,b1,W2,b2,Sigmoid)
 	lCross = getLCross(y,P)
 	L2 = np.sum(np.power(W1,2))+np.sum(np.power(W2,2))
 	return (lCross/X.shape[1] + lamda*L2).item(0)
 
-def computeAccuracy(X, y, W1, b1, W2, b2):
-	P,_,_ = evaluateClassifier(X,W1,b1,W2,b2)
+def computeAccuracy(X, y, W1, b1, W2, b2, Sigmoid=False):
+	P,_,_ = evaluateClassifier(X,W1,b1,W2,b2,Sigmoid)
 	corrects = 0.0
 	for i in range(len(y)):
 		if y[i] == np.argmax(P[:,i]):
 			corrects+=1
 	return corrects/len(y)
 
-def computeGradients(X, Y, W1, b1, W2, b2, lamda):
-	P, h, s1 = evaluateClassifier(X,W1,b1,W2,b2)
+def computeGradients(X, Y, W1, b1, W2, b2, lamda, Sigmoid=False):
+	P, h, s1 = evaluateClassifier(X,W1,b1,W2,b2, Sigmoid)
 	g = P-Y
 	gradB1 = np.zeros(b1.shape)
 	gradW1 = np.zeros(W1.shape)
@@ -119,12 +129,19 @@ def computeGradients(X, Y, W1, b1, W2, b2, lamda):
 		gradB2 += g[:,i]
 		gradW2 += g[:,i]*h[:,i].T
 
-	g = g.T*W2
-	ind = np.where(s1>0, 1, 0)
-	for i in range(g.shape[0]):
-		g2 = (g[i] * np.diag(ind[:,i])).T
-		gradB1 += g2
-		gradW1 += g2*X[:,i].T
+	g = W2.T*g
+	if (Sigmoid):
+		deltaSig = sigDerivative(h)
+		for i in range(g.shape[1]):
+			g2 = (g[:,i].T * np.diag(deltaSig[:,i])).T
+			gradB1 += g2
+			gradW1 += g2*X[:,i].T
+	else:
+		ind = np.where(s1>0, 1, 0)
+		for i in range(g.shape[1]):
+			g2 = (g[:,i].T * np.diag(ind[:,i])).T
+			gradB1 += g2
+			gradW1 += g2*X[:,i].T
 
 	gradB1 /= X.shape[1]
 	gradW1 /= X.shape[1]
@@ -134,20 +151,20 @@ def computeGradients(X, Y, W1, b1, W2, b2, lamda):
 	gradW2 += 2*lamda*W2
 	return gradW1, gradB1, gradW2, gradB2
 
-def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
+def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h, Sigmoid=False):
 
 	gradW1 = np.zeros(W1.shape)
 	gradB1 = np.zeros(b1.shape)
 	gradW2 = np.zeros(W2.shape)
 	gradB2 = np.zeros(b2.shape)
 
-	c = computeCost(X, Y, y, W1, b1, W2, b2, lamda)
+	c = computeCost(X, Y, y, W1, b1, W2, b2, lamda, Sigmoid)
 
 	print("B1")
 	for i in range(b1.shape[0]):
 		bTry = b1.copy()
 		bTry[i] += h
-		c21 = computeCost(X, Y, y, W1, bTry, W2, b2, lamda)
+		c21 = computeCost(X, Y, y, W1, bTry, W2, b2, lamda, Sigmoid)
 		gradB1[i] = (c21-c)/h
 		progressPrint(i,b1.shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -158,7 +175,7 @@ def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
 	for i in range(b2.shape[0]):
 		bTry = b2.copy()
 		bTry[i] += h
-		c22 = computeCost(X, Y, y, W1, b1, W2, bTry, lamda)
+		c22 = computeCost(X, Y, y, W1, b1, W2, bTry, lamda, Sigmoid)
 		gradB2[i] = (c22-c)/h
 		progressPrint(i,b2.shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -170,7 +187,7 @@ def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
 		for j in range(W1.shape[1]):
 			WTry = W1.copy()
 			WTry[i,j] += h
-			c21 = computeCost(X, Y, y, WTry, b1, W2, b2, lamda)
+			c21 = computeCost(X, Y, y, WTry, b1, W2, b2, lamda, Sigmoid)
 			gradW1[i,j] = (c21-c)/h
 			progressPrint(i*W1.shape[1] + j,W1.shape[1] * W1.shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -182,7 +199,7 @@ def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
 		for j in range(W2.shape[1]):
 			WTry = W2.copy()
 			WTry[i,j] += h
-			c22 = computeCost(X, Y, y, W1, b1, WTry, b2, lamda)
+			c22 = computeCost(X, Y, y, W1, b1, WTry, b2, lamda, Sigmoid)
 			gradW2[i,j] = (c22-c)/h
 			progressPrint(i*W2.shape[1] + j,W2.shape[1] * W2.shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -191,8 +208,8 @@ def computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, h):
 
 	return gradW1, gradB1, gradW2, gradB2
 
-def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda, momentum):
-	gradW1, gradB1, gradW2, gradB2 = computeGradients(X, Y, W1, b1, W2, b2, lamda)
+def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda, momentum, Sigmoid=False):
+	gradW1, gradB1, gradW2, gradB2 = computeGradients(X, Y, W1, b1, W2, b2, lamda, Sigmoid)
 	momentum[0] = GDparams[4]*momentum[0] + GDparams[1]*gradW1
 	momentum[1] = GDparams[4]*momentum[1] + GDparams[1]*gradB1
 	momentum[2] = GDparams[4]*momentum[2] + GDparams[1]*gradW2
@@ -202,7 +219,7 @@ def updateNetwork(X, Y, GDparams, W1, b1, W2, b2, lamda, momentum):
 	W2 -= momentum[2]
 	b2 -= momentum[3]
 
-def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, earlyStop=False):
+def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, earlyStop=False, Sigmoid=False):
 
 	costTrain = [0.0]*GDparams[2]
 	accTrain = [0.0]*GDparams[2]
@@ -217,12 +234,12 @@ def miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XV, YV, yV, momentum, 
 			end = i*GDparams[0]
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
-			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
+			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum, Sigmoid)
 		GDparams[1] *= GDparams[3] #Decay eta
-		costTrain[epoch] = computeCost(X, Y, y, W1, b1, W2, b2, lamda)
-		accTrain[epoch] = computeAccuracy(X, y, W1, b1, W2, b2)
-		costVal[epoch] = computeCost(XV, YV, yV, W1, b1, W2, b2, lamda)
-		accVal[epoch] = computeAccuracy(XV, yV, W1, b1, W2, b2)
+		costTrain[epoch] = computeCost(X, Y, y, W1, b1, W2, b2, lamda, Sigmoid)
+		accTrain[epoch] = computeAccuracy(X, y, W1, b1, W2, b2, Sigmoid)
+		costVal[epoch] = computeCost(XV, YV, yV, W1, b1, W2, b2, lamda, Sigmoid)
+		accVal[epoch] = computeAccuracy(XV, yV, W1, b1, W2, b2, Sigmoid)
 		if earlyStop and epoch > 5 and (costVal[epoch - 1] - costVal[epoch]) < 0.0001:
 			break
 		progressPrint(epoch ,GDparams[2])
@@ -256,8 +273,8 @@ def checkGradTest():
 	y = y[0:n]
 	W1, b1, W2, b2 = getInitData(X,Y, 50)
 	lamda = 0.0
-	analW1, analB1, analW2, analB2 = computeGradients(X, Y, W1, b1, W2, b2, lamda)
-	numW1, numB1, numW2, numB2 = computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, 1e-05)
+	analW1, analB1, analW2, analB2 = computeGradients(X, Y, W1, b1, W2, b2, lamda, Sigmoid=True)
+	numW1, numB1, numW2, numB2 = computeGradsNum(X, Y, y, W1, b1, W2, b2, lamda, 1e-05, Sigmoid=True)
 
 	w1Error = np.max(abs(analW1 - numW1) / np.clip(abs(analW1) + abs(numW1), a_min=1e-06, a_max=9999))
 	b1Error = np.max(abs(analB1 - numB1) / np.clip(abs(analB1) + abs(numB1), a_min=1e-06, a_max=9999))
@@ -334,13 +351,22 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName):
 			f.write("Accuracy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
 
 def test():
-	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getAllData()
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	lamda = 0.001 #Best lambda 0.00049
-	GDparams = [100, 0.02573, 30, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
-	W1, b1, W2, b2 = getInitData(X, Y, 150, He=True)
+	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
 	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2))
+
+def testSig():
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
+	lamda = 0.001 #Best lambda 0.00049
+	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
+	momentum = initMomentum(W1, b1, W2, b2)
+	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True, Sigmoid=True)
+	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2, Sigmoid=True))
 
 def progressPrint(nominator, denominator):
 	denominator = float(denominator)*100
@@ -350,8 +376,9 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
-#checkGradTest()
-test()
+checkGradTest()
+#test()
+#testSig()
 #parameterTest(-3, -1, -4, -1, "parameters")
 #parameterTest(-1.8, -1.25, -4, -2.7, "fineSearch")
 
