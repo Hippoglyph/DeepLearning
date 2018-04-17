@@ -297,7 +297,7 @@ def initMomentum(W1, b1, W2, b2):
 	b2M = np.zeros(b2.shape)
 	return [W1M, b1M, W2M, b2M]
 
-def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
+def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum, Sigmoid=False):
 	for epoch in range(GDparams[2]):
 		stoppedAt = epoch + 1
 		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
@@ -305,10 +305,10 @@ def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
 			end = i*GDparams[0]
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
-			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
+			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum,Sigmoid)
 		GDparams[1] *= GDparams[3] #Decay eta
 
-def parameterTest(e_min, e_max, l_min, l_max, fileName):
+def parameterTest(e_min, e_max, l_min, l_max, fileName, Sigmoid=False):
 
 	nIters = 100
 
@@ -329,8 +329,8 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName):
 		W1, b1, W2, b2 = getInitData(X, Y, 50, Xavier=True)
 		momentum = initMomentum(W1, b1, W2, b2)
 
-		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum)
-		valAcc[i] = computeAccuracy(XValidate, yValidate, W1, b1, W2, b2)
+		fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum, Sigmoid)
+		valAcc[i] = computeAccuracy(XValidate, yValidate, W1, b1, W2, b2, Sigmoid)
 		parameters[i] = [lamda, eta]
 		progressPrint(i , nIters)
 	sys.stdout.write('\r'+"100%  ")
@@ -362,7 +362,7 @@ def test():
 def testSig():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	lamda = 0.001 #Best lambda 0.00049
-	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	GDparams = [100, 0.001, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
 	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True, Sigmoid=True)
@@ -376,11 +376,12 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
-checkGradTest()
+#checkGradTest()
 #test()
-#testSig()
+testSig()
 #parameterTest(-3, -1, -4, -1, "parameters")
 #parameterTest(-1.8, -1.25, -4, -2.7, "fineSearch")
+#parameterTest(-3, -1, -4, -1, "parametersSigmoid", Sigmoid=True)
 
 #Best lambda  = 0.00049
 #Best Eta = 0.02573
