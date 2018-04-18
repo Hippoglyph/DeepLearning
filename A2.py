@@ -356,11 +356,11 @@ def test():
 	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
-	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=True)
+	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=False)
 	print(computeAccuracy(xTest, yTest, W1, b1, W2, b2))
 
 def testSig():
-	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getAllData()
 	lamda = 0.00017 #Best lambda 0.00017 Eta 0.08956
 	GDparams = [100, 0.08956, 40, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
@@ -377,8 +377,8 @@ def progressPrint(nominator, denominator):
 		sys.stdout.flush()
 
 #checkGradTest()
-#test()
-testSig()
+test()
+#testSig()
 #parameterTest(-3, -1, -4, -1, "parameters")
 #parameterTest(-1.8, -1.25, -4, -2.7, "fineSearch")
 #parameterTest(-3, -1, -4, -1, "parametersSigmoid", Sigmoid=True)
@@ -387,3 +387,5 @@ testSig()
 #Best Eta = 0.02573
 
 #150 hidden 51.98 %
+#Best 51.27 %
+#Best sigmoid 50.84 %
