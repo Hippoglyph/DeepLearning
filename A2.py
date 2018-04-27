@@ -353,7 +353,7 @@ def parameterTest(e_min, e_max, l_min, l_max, fileName, Sigmoid=False):
 def test():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	lamda = 0.00049 #Best lambda 0.00049 Eta 0.02573
-	GDparams = [100, 0.02573, 5, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	GDparams = [100, 0.02573, 20, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
 	W1, b1, W2, b2 = getInitData(X, Y, 50, He=True)
 	momentum = initMomentum(W1, b1, W2, b2)
 	miniBatchGD(X, Y, y, GDparams, W1, b1, W2, b2, lamda, XValidate, YValidate, yValidate, momentum, earlyStop=False)
