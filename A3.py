@@ -89,18 +89,40 @@ def getInitData(X,Y, topology, He=False):
 		b.append(np.matrix([[np.random.normal(0,var)] for K in range(Y.shape[0])]))
 	return W, b
 
-def evaluateClassifier(X, W, b):
+def evaluateClassifier(X, W, b, muAv, vAv, first=False):
 	s = []
+	sh = []
+	mu = []
+	var = []
 	Xl = []
 	Xl.append(X)
 	for l in range(len(W) - 1):
 		s.append(W[l]*Xl[l] + b[l])
-		Xl.append(np.maximum(s[l], 0))
+		mu.append(np.mean(s[l], axis=1))
+		var.append(np.var(s[l], axis=1))
+		if(first):
+			sh.append(batchNormalize(s[l], mu[l], var[l]))
+		else:
+			sh.append(batchNormalize(s[l], muAv[l], vAv[l]))
+		Xl.append(np.maximum(sh[l], 0))
 	s.append(W[-1]*Xl[-1] + b[-1])
 	sExp = np.exp(s[-1])
 	p = sExp/sum(sExp)
-	return p, s, Xl
+	return p, s, Xl, mu, var
 
+def batchNormalize(s, mu, var):
+	return np.multiply(np.power(var + 1e-05, -0.5), (s-mu))
+
+def batchNormBackPass(g, s, mu, var):
+	Vb = var + 1e-05
+	vBSq = np.power(Vb, -0.5)
+	sMu = s - mu
+	n = s.shape[0]
+	gVgSq = np.multiply(g, vBSq)
+	gradVar = -0.5 * np.sum(np.multiply(np.multiply(g,np.power(Vb, -3./2)), sMu), axis=1)
+	gradMu = - np.sum(gVgSq, axis=1)
+
+	return gVgSq + (2/n) * np.multiply(gradVar, sMu) + gradMu/n
 
 def getLCross(y, P):
 	lCross = 0.0
@@ -108,39 +130,49 @@ def getLCross(y, P):
 		lCross -= np.log(P[y[i],i])
 	return lCross
 
-def computeCost(X, Y, y, W, b, lamda):
-	P,_,_ = evaluateClassifier(X,W,b)
+def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
+	P,_,_,_,_ = evaluateClassifier(X,W,b, muAv, vAv)
 	lCross = getLCross(y,P)
 	L2 = 0
 	for l in range(len(W)):
 		L2 += np.sum(np.power(W[l],2))
 	return (lCross/X.shape[1] + lamda*L2).item(0)
 
-def computeAccuracy(X, y, W, b):
-	P,_,_ = evaluateClassifier(X,W,b)
+def computeAccuracy(X, y, W, b, muAv, vAv):
+	P,_,_,_,_ = evaluateClassifier(X,W,b, muAv, vAv)
 	corrects = 0.0
 	for i in range(len(y)):
 		if y[i] == np.argmax(P[:,i]):
 			corrects+=1
 	return corrects/len(y)
 
-def computeGradients(X, Y, W, b, lamda):
+def computeGradients(X, Y, W, b, lamda, muAv, vAv, a, first):
 	gradW = [np.zeros(W[l].shape) for l in range(len(W))]
 	gradB = [np.zeros(b[l].shape) for l in range(len(b))]
 
-	P, s, Xl = evaluateClassifier(X,W,b)
+	P, s, Xl, mu, var = evaluateClassifier(X,W,b, muAv, vAv, first)
+
+	if(first):
+		muAv = copy.deepcopy(mu)
+		vAv = copy.deepcopy(var)
+	else:
+		for l in range(len(muAv)):
+			muAv[l] = a*muAv[l] + (1 - a)*mu[l]
+			vAv = a*vAv[l] + (1 - a)*var[l]
+
 	g = P-Y
 
-	for l in reversed(range(0, len(W))):
-		for i in range(g.shape[1]):
-			gradB[l] += g[:,i]
-			gradW[l] += g[:,i]*Xl[l][:,i].T
+	for l in reversed(range(len(W))):
+		if l != len(W) -1: 
+			g = batchNormBackPass(g, s[l], muAv[l], vAv[l])
+
+		gradB[l] = np.sum(g,axis=1)
+		gradW[l] = g*Xl[l].T
 
 		if l > 0:
-			g = W[l].T*g
-			ind = np.where(s[l -1]>0, 1, 0)
-			for i in range(g.shape[1]):
-				g[:,i] = (g[:,i].T * np.diag(ind[:,i])).T
+			g = g.T*W[l]
+			ind = (s[l -1] > 0)
+			g = np.multiply(g.T,ind)
 
 		gradW[l] /= X.shape[1]
 		gradB[l] /= X.shape[1]
@@ -175,8 +207,8 @@ def computeGradsNum(X, Y, y, W, b, lamda, h):
 
 	return gradW, gradB
 
-def updateNetwork(X, Y, GDparams, W, b, lamda, momentumW, momentumB):
-	gradW, gradB = computeGradients(X, Y, W, b, lamda)
+def updateNetwork(X, Y, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv, first):
+	gradW, gradB = computeGradients(X, Y, W, b, lamda, muAv, vAv, GDparams[5], first)
 	for l in range(len(W)):
 		momentumW[l] = GDparams[4]*momentumW[l] + GDparams[1]*gradW[l]
 		momentumB[l] = GDparams[4]*momentumB[l] + GDparams[1]*gradB[l]
@@ -184,13 +216,13 @@ def updateNetwork(X, Y, GDparams, W, b, lamda, momentumW, momentumB):
 		b[l] -= momentumB[l]
 
 
-def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB, earlyStop=False):
+def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB, muAv, vAv, earlyStop=False):
 
 	costTrain = [0.0]*GDparams[2]
 	accTrain = [0.0]*GDparams[2]
 	costVal = [0.0]*GDparams[2]
 	accVal = [0.0]*GDparams[2]
-
+	first = True
 	stoppedAt = 0
 	for epoch in range(GDparams[2]):
 		stoppedAt = epoch + 1
@@ -199,12 +231,14 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB
 			end = i*GDparams[0]
 			XBatch = X[:,start:end]
 			YBatch = Y[:,start:end]
-			updateNetwork(XBatch, YBatch, GDparams, W, b, lamda, momentumW, momentumB)
+			updateNetwork(XBatch, YBatch, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv, first)
+			if (first):
+				first = False
 		GDparams[1] *= GDparams[3] #Decay eta
-		costTrain[epoch] = computeCost(X, Y, y, W, b, lamda)
-		accTrain[epoch] = computeAccuracy(X, y, W, b)
-		costVal[epoch] = computeCost(XV, YV, yV, W, b, lamda)
-		accVal[epoch] = computeAccuracy(XV, yV, W, b)
+		costTrain[epoch] = computeCost(X, Y, y, W, b, lamda, muAv, vAv)
+		accTrain[epoch] = computeAccuracy(X, y, W, b, muAv, vAv)
+		costVal[epoch] = computeCost(XV, YV, yV, W, b, lamda, muAv, vAv)
+		accVal[epoch] = computeAccuracy(XV, yV, W, b, muAv, vAv)
 		if earlyStop and epoch > 5 and (costVal[epoch - 1] - costVal[epoch]) < 0.0001:
 			break
 		progressPrint(epoch ,GDparams[2])
@@ -232,7 +266,7 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB
 def checkGradTest():
 	X, Y, y = loadBatch("data_batch_1")
 	n = 10
-	d = 500 #3072
+	d = 3072 #3072
 	X = X[0:d,0:n]
 	Y = Y[0:d,0:n]
 	y = y[0:n]
@@ -262,26 +296,23 @@ def initMomentum(W, b):
 
 	return momentumW, momentumB
 
-def fit(X, Y, y, GDparams, W1, b1, W2, b2, lamda, momentum):
-	for epoch in range(GDparams[2]):
-		stoppedAt = epoch + 1
-		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
-			start = (i-1)*GDparams[0]
-			end = i*GDparams[0]
-			XBatch = X[:,start:end]
-			YBatch = Y[:,start:end]
-			updateNetwork(XBatch, YBatch, GDparams, W1, b1, W2, b2, lamda, momentum)
-		GDparams[1] *= GDparams[3] #Decay eta
-
+def initBatchNorm(W):
+	muAv = []
+	vAv = []
+	for l in range(len(W) -1):
+		muAv.append(np.ones((W[l].shape[0], 1)))
+		vAv.append(np.ones((W[l].shape[0], 1)))
+	return muAv, vAv
 
 def test():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
 	lamda = 0.00049
-	GDparams = [100, 0.02573, 20, 0.95, 0.9] #BatchSize, eta, epoch, decay, rho
+	GDparams = [100, 0.1, 10, 0.95, 0.9, 0.99] #BatchSize, eta, epoch, decay, rho, alpha
 	W, b = getInitData(X, Y, [50], He=True)
 	momentumW, momentumB = initMomentum(W, b)
-	miniBatchGD(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, momentumW, momentumB, earlyStop=False)
-	print(computeAccuracy(xTest, yTest, W, b))
+	muAv, vAv = initBatchNorm(W)
+	miniBatchGD(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, momentumW, momentumB, muAv, vAv, earlyStop=False)
+	print(computeAccuracy(xTest, yTest, W, b, muAv, vAv)) 
 	
 
 def progressPrint(nominator, denominator):
@@ -292,5 +323,5 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
-checkGradTest()
-#test()
+#checkGradTest()
+test()
