@@ -118,7 +118,7 @@ def batchNormBackPass(g, s, mu, var):
 	Vb = var + 1e-05
 	vBSq = np.power(Vb, -0.5)
 	sMu = s - mu
-	n = s.shape[0]
+	n = s.shape[1]
 	gVgSq = np.multiply(g, vBSq)
 	gradVar = -0.5 * np.sum(np.multiply(np.multiply(g,np.power(Vb, -3./2)), sMu), axis=1)
 	gradMu = - np.sum(gVgSq, axis=1)
@@ -131,9 +131,12 @@ def getLCross(y, P):
 		lCross -= np.log(P[y[i],i])
 	return lCross
 
-def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
+def computeCost(X, Y, y, W, b, lamda, muAv, vAv, num=False):
 	if(useBatch):
-		P,_,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv) #Wrong here
+		if (num):
+			P,_,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv)
+		else:
+			P,_,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
 	else:
 		P,_,_,_,_,_ = evaluateClassifier(X,W,b)
 	lCross = getLCross(y,P)
@@ -175,12 +178,13 @@ def computeGradients(X, Y, W, b, lamda, muAv, vAv, a, first):
 		gradW[l] = g*Xl[l].T
 
 		if l > 0:
-			g = W[l].T*g
+			g = g.T*W[l]
 			score = s[l - 1]
 			if(useBatch):
-				score = sh[l - 1]
-			ind = (score > 0)
-			g = np.multiply(g,ind)
+				ind = (sh[l - 1] > 0)
+			else:
+				ind = (s[l - 1] > 0)
+			g = np.multiply(g.T,ind)
 			if(useBatch):
 				g = batchNormBackPass(g, s[l - 1], mu[l-1], var[l-1])
 
@@ -195,20 +199,20 @@ def computeGradsNum(X, Y, y, W, b, lamda, h, muAv, vAv):
 	gradW = [np.zeros(W[l].shape) for l in range(len(W))]
 	gradB = [np.zeros(b[l].shape) for l in range(len(b))]
 
-	c = computeCost(X, Y, y, W, b, lamda, muAv, vAv)
+	c = computeCost(X, Y, y, W, b, lamda, muAv, vAv, num=True)
 
 	for l in range(len(W)):
 		for i in range(b[l].shape[0]):
 			bTry = copy.deepcopy(b)
 			bTry[l][i] += h
-			c2 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv)
+			c2 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv, num=True)
 			gradB[l][i] = (c2-c)/h
 
 		for i in range(W[l].shape[0]):
 			for j in range(W[l].shape[1]):
 				WTry = copy.deepcopy(W)
 				WTry[l][i,j] += h
-				c2 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv)
+				c2 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv, num=True)
 				gradW[l][i,j] = (c2-c)/h
 				progressPrint(i*W[l].shape[1] + j,W[l].shape[1] * W[l].shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -226,18 +230,18 @@ def computeGradsNumSlow(X, Y, y, W, b, lamda, h, muAv, vAv):
 		for i in range(b[l].shape[0]):
 			bTry = copy.deepcopy(b)
 			bTry[l][i] -= h
-			c1 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv)
+			c1 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv, num=True)
 			bTry[l][i] += 2*h
-			c2 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv)
+			c2 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv, num=True)
 			gradB[l][i] = (c2-c1)/(2*h)
 
 		for i in range(W[l].shape[0]):
 			for j in range(W[l].shape[1]):
 				WTry = copy.deepcopy(W)
 				WTry[l][i,j] -= h
-				c1 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv)
+				c1 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv, num=True)
 				WTry[l][i,j] += 2*h
-				c2 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv)
+				c2 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv, num=True)
 				gradW[l][i,j] = (c2-c1)/(2*h)
 				progressPrint(i*W[l].shape[1] + j,W[l].shape[1] * W[l].shape[0])
 	sys.stdout.write('\r'+"100%  ")
@@ -363,5 +367,5 @@ def progressPrint(nominator, denominator):
 		sys.stdout.flush()
 
 useBatch = True
-checkGradTest()
-#test()
+#checkGradTest()
+test()
