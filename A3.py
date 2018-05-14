@@ -132,11 +132,8 @@ def getLCross(y, P):
 	return lCross
 
 def computeCost(X, Y, y, W, b, lamda, muAv, vAv, num=False):
-	if(useBatch):
-		if (num):
-			P,_,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv)
-		else:
-			P,_,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
+	if(useBatch and not num):
+		P,_,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
 	else:
 		P,_,_,_,_,_ = evaluateClassifier(X,W,b)
 	lCross = getLCross(y,P)
@@ -331,6 +328,62 @@ def checkGradTest():
 		print("W"+str(l)+" = " + str(wError))
 		print("b"+str(l)+" = " + str(bError))
 
+def fit(X, Y, y, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv):
+	first = True
+	for epoch in range(GDparams[2]):
+		stoppedAt = epoch + 1
+		for i in range(1, math.floor(X.shape[1]/GDparams[0])):
+			start = (i-1)*GDparams[0]
+			end = i*GDparams[0]
+			XBatch = X[:,start:end]
+			YBatch = Y[:,start:end]
+			updateNetwork(XBatch, YBatch, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv, first)
+			first = False
+		GDparams[1] *= GDparams[3] #Decay eta
+
+def parameterTest(e_min, e_max, l_min, l_max, fileName, hidden):
+
+	nIters = 100
+
+	valAcc = [0.0]*nIters
+	parameters  = [0.0, 0.0]*nIters
+	bestAcc = [0,0,0]
+	bestId = [0,0,0]
+
+	GDparams = [250, 0, 10, 0.95, 0.9, 0.99] #BatchSize, eta, epoch, decay, rho, alpha
+
+	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
+
+	for i in range(nIters):
+		eta = 10**((e_min + (e_max - e_min)*np.random.random()))
+		lamda = 10**((l_min + (l_max - l_min)*np.random.random()))
+		GDparams[1] = eta
+
+		W, b = getInitData(X, Y, hidden)
+		momentumW, momentumB = initMomentum(W, b)
+		muAv, vAv = initBatchNorm(W)
+
+		fit(X, Y, y, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv)
+		valAcc[i] = computeAccuracy(XValidate, yValidate, W, b, muAv, vAv)
+		parameters[i] = [lamda, eta]
+		progressPrint(i , nIters)
+	sys.stdout.write('\r'+"100%  ")
+	sys.stdout.flush()
+	print("")
+
+	for i in range(nIters):
+		argMin = np.argmin(bestAcc)
+		if valAcc[i] > bestAcc[argMin]:
+			bestAcc[argMin] = valAcc[i]
+			bestId[argMin] = i
+
+	with open(fileName, "w") as f:
+		for i in range(nIters):
+			addOn = ""
+			if i in bestId:
+				addOn = " < Done good"
+			f.write("Accuracy: " + "%.3f" % round(valAcc[i], 3) + " \t Lambda: " + "%.5f" % round(parameters[i][0], 5) + " \t Eta: " + "%.5f" % round(parameters[i][1], 5) + addOn +"\n")
+
 def initMomentum(W, b):
 	momentumW = []
 	momentumB = []
@@ -368,4 +421,7 @@ def progressPrint(nominator, denominator):
 
 useBatch = True
 #checkGradTest()
-test()
+#test()
+
+#parameterTest(-3, -1, -4, -1, "coarse3", [50, 30])    #Lambda: 0.00013 	 Eta: 0.01692
+#parameterTest(-1.95, -1.3, -4, -2, "fine3", [50, 30]) #Lambda: 0.00461 	 Eta: 0.01917
