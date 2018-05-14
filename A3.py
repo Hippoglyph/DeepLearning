@@ -133,7 +133,7 @@ def getLCross(y, P):
 
 def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
 	if(useBatch):
-		P,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
+		P,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv) #Wrong here
 	else:
 		P,_,_,_,_ = evaluateClassifier(X,W,b)
 	lCross = getLCross(y,P)
@@ -272,12 +272,12 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB
 
 def checkGradTest():
 	X, Y, y = loadBatch("data_batch_1")
-	n = 10
-	d = 500 #3072
+	n = 3
+	d = 3072 #3072
 	X = X[0:d,0:n]
 	Y = Y[0:d,0:n]
 	y = y[0:n]
-	W, b = getInitData(X,Y, [50, 30, 20])
+	W, b = getInitData(X,Y, [50, 50, 30])
 	muAv, vAv = initBatchNorm(W)
 	first = True
 	lamda = 0.0
@@ -331,6 +331,6 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
-useBatch = True
-#checkGradTest()
-test()
+useBatch = False
+checkGradTest()
+#test()
