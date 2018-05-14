@@ -133,7 +133,7 @@ def getLCross(y, P):
 
 def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
 	if(useBatch):
-		P,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv) #Wrong here
+		P,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv) #Wrong here
 	else:
 		P,_,_,_,_ = evaluateClassifier(X,W,b)
 	lCross = getLCross(y,P)
@@ -215,6 +215,35 @@ def computeGradsNum(X, Y, y, W, b, lamda, h, muAv, vAv):
 
 	return gradW, gradB
 
+def computeGradsNumSlow(X, Y, y, W, b, lamda, h, muAv, vAv):
+
+	gradW = [np.zeros(W[l].shape) for l in range(len(W))]
+	gradB = [np.zeros(b[l].shape) for l in range(len(b))]
+
+	for l in range(len(W)):
+		for i in range(b[l].shape[0]):
+			bTry = copy.deepcopy(b)
+			bTry[l][i] -= h
+			c1 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv)
+			bTry[l][i] += 2*h
+			c2 = computeCost(X, Y, y, W, bTry, lamda, muAv, vAv)
+			gradB[l][i] = (c2-c1)/(2*h)
+
+		for i in range(W[l].shape[0]):
+			for j in range(W[l].shape[1]):
+				WTry = copy.deepcopy(W)
+				WTry[l][i,j] -= h
+				c1 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv)
+				WTry[l][i,j] += 2*h
+				c2 = computeCost(X, Y, y, WTry, b, lamda, muAv, vAv)
+				gradW[l][i,j] = (c2-c1)/(2*h)
+				progressPrint(i*W[l].shape[1] + j,W[l].shape[1] * W[l].shape[0])
+	sys.stdout.write('\r'+"100%  ")
+	sys.stdout.flush()
+	print("")
+
+	return gradW, gradB
+
 def updateNetwork(X, Y, GDparams, W, b, lamda, momentumW, momentumB, muAv, vAv, first):
 	gradW, gradB = computeGradients(X, Y, W, b, lamda, muAv, vAv, GDparams[5], first)
 	for l in range(len(W)):
@@ -273,7 +302,7 @@ def miniBatchGD(X, Y, y, GDparams, W, b, lamda, XV, YV, yV, momentumW, momentumB
 def checkGradTest():
 	X, Y, y = loadBatch("data_batch_1")
 	n = 3
-	d = 3072 #3072
+	d = 500 #3072
 	X = X[0:d,0:n]
 	Y = Y[0:d,0:n]
 	y = y[0:n]
@@ -282,7 +311,7 @@ def checkGradTest():
 	first = True
 	lamda = 0.0
 	analW, analB = computeGradients(X, Y, W, b, lamda, muAv, vAv, 0.99, first)
-	numW, numB = computeGradsNum(X, Y, y, W, b, lamda, 1e-05, muAv, vAv)
+	numW, numB = computeGradsNumSlow(X, Y, y, W, b, lamda, 1e-05, muAv, vAv)
 
 	for l in range(len(W)):
 		print("------")
@@ -331,6 +360,6 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
-useBatch = False
+useBatch = True
 checkGradTest()
 #test()
