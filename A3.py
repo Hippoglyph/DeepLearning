@@ -109,7 +109,7 @@ def evaluateClassifier(X, W, b, fixNormalize = False, muAv=[], vAv=[]):
 	s.append(W[-1]*Xl[-1] + b[-1])
 	sExp = np.exp(s[-1])
 	p = sExp/sum(sExp)
-	return p, s, Xl, mu, var
+	return p, s, Xl, mu, var, sh
 
 def batchNormalize(s, mu, var):
 	return np.multiply(np.power(var + 1e-05, -0.5), (s-mu))
@@ -133,9 +133,9 @@ def getLCross(y, P):
 
 def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
 	if(useBatch):
-		P,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv) #Wrong here
+		P,_,_,_,_,_ = evaluateClassifier(X,W,b,False, muAv, vAv) #Wrong here
 	else:
-		P,_,_,_,_ = evaluateClassifier(X,W,b)
+		P,_,_,_,_,_ = evaluateClassifier(X,W,b)
 	lCross = getLCross(y,P)
 	L2 = 0
 	for l in range(len(W)):
@@ -144,9 +144,9 @@ def computeCost(X, Y, y, W, b, lamda, muAv, vAv):
 
 def computeAccuracy(X, y, W, b, muAv, vAv):
 	if(useBatch):
-		P,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
+		P,_,_,_,_,_ = evaluateClassifier(X,W,b,True, muAv, vAv)
 	else:
-		P,_,_,_,_ = evaluateClassifier(X,W,b)
+		P,_,_,_,_,_ = evaluateClassifier(X,W,b)
 	corrects = 0.0
 	for i in range(len(y)):
 		if y[i] == np.argmax(P[:,i]):
@@ -157,7 +157,7 @@ def computeGradients(X, Y, W, b, lamda, muAv, vAv, a, first):
 	gradW = [np.zeros(W[l].shape) for l in range(len(W))]
 	gradB = [np.zeros(b[l].shape) for l in range(len(b))]
 
-	P, s, Xl, mu, var = evaluateClassifier(X,W,b)
+	P, s, Xl, mu, var, sh = evaluateClassifier(X,W,b)
 
 	if(first):
 		muAv = copy.deepcopy(mu)
@@ -170,17 +170,19 @@ def computeGradients(X, Y, W, b, lamda, muAv, vAv, a, first):
 	g = P-Y
 
 	for l in reversed(range(len(W))):
-		if l != len(W) -1:
-			if(useBatch):
-				g = batchNormBackPass(g, s[l], mu[l], var[l])
 
 		gradB[l] = np.sum(g,axis=1)
 		gradW[l] = g*Xl[l].T
 
 		if l > 0:
-			g = g.T*W[l]
-			ind = (s[l -1] > 0)
-			g = np.multiply(g.T,ind)
+			g = W[l].T*g
+			score = s[l - 1]
+			if(useBatch):
+				score = sh[l - 1]
+			ind = (score > 0)
+			g = np.multiply(g,ind)
+			if(useBatch):
+				g = batchNormBackPass(g, s[l - 1], mu[l-1], var[l-1])
 
 		gradW[l] /= X.shape[1]
 		gradB[l] /= X.shape[1]
