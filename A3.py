@@ -402,15 +402,14 @@ def initBatchNorm(W):
 
 def test():
 	X, Y, y, XValidate, YValidate, yValidate, xTest, YTest, yTest = getSomeData()
-	lamda = 0.00049
-	GDparams = [250, 0.02573, 20, 0.95, 0.9, 0.99] #BatchSize, eta, epoch, decay, rho, alpha
-	W, b = getInitData(X, Y, [150, 100, 50, 50])
+	lamda = 0.00461
+	GDparams = [250, 0.01917, 20, 0.95, 0.9, 0.99] #BatchSize, eta, epoch, decay, rho, alpha
+	W, b = getInitData(X, Y, [50, 30])
 	momentumW, momentumB = initMomentum(W, b)
 	muAv, vAv = initBatchNorm(W)
 	miniBatchGD(X, Y, y, GDparams, W, b, lamda, XValidate, YValidate, yValidate, momentumW, momentumB, muAv, vAv, earlyStop=False)
 	print(computeAccuracy(xTest, yTest, W, b, muAv, vAv))
 	
-
 def progressPrint(nominator, denominator):
 	denominator = float(denominator)*100
 	nominator = float(nominator)*100
@@ -421,7 +420,8 @@ def progressPrint(nominator, denominator):
 
 useBatch = True
 #checkGradTest()
-#test()
+test()
 
 #parameterTest(-3, -1, -4, -1, "coarse3", [50, 30])    #Lambda: 0.00013 	 Eta: 0.01692
 #parameterTest(-1.95, -1.3, -4, -2, "fine3", [50, 30]) #Lambda: 0.00461 	 Eta: 0.01917
+#Test acc 0.405
