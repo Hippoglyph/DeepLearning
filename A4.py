@@ -112,7 +112,6 @@ def test():
 	yChars = bookData[1:seqLength+1]
 
 	xTrain, yTrain = getInput(xChars, yChars)
-	#hp = np.zeros((m,1))
 	calculateGradient(RNN,xTrain,yTrain)
 		
 
