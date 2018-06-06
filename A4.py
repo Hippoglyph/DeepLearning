@@ -48,7 +48,7 @@ def sample(p):
 	return K-1
 
 def predict(RNN, hp, xChar, n=200):
-	#hp = np.zeros((m,1))
+	nhp = copy.deepcopy(hp)
 	x = np.zeros((K,1))
 
 	prevXi = charToInd[xChar]
@@ -56,7 +56,7 @@ def predict(RNN, hp, xChar, n=200):
 	
 	pred = ""
 	for j in range(n):
-		p, hp = forwardPass(RNN, hp, x)
+		p, nhp = forwardPass(RNN, nhp, x)
 		xi = sample(p)
 		pred += indToChar[xi]
 		x[prevXi] = 0
@@ -80,11 +80,12 @@ def forwardPass(RNN, hp, x):
 
 def feedForward(RNN, X, hp):
 	hL = np.zeros((m,seqLength+1))
+	hL[:,0:1] = hp
 	pL = np.zeros((K,seqLength))
 	for t in range(X.shape[1]):
-		p, hp = forwardPass(RNN, hp, X[:,t:t+1])
+		p, nhp = forwardPass(RNN, hL[:,t:t+1], X[:,t:t+1])
 		pL[:,t:t+1] = p
-		hL[:,t+1:t+2] = hp
+		hL[:,t+1:t+2] = nhp
 	return pL, hL
 
 def calculateGradient(RNN,X,Y, hp):
@@ -282,7 +283,7 @@ def train(RNN, numEpoch):
 				progVar+=1
 				print("------")
 				print("Epoch = " + str(epoch+1) +", Iter = " + str(iterN) + ", Smooth Loss = " + str(smoothLoss))
-				predict(RNN, copy.deepcopy(hp), bookData[e-1])
+				predict(RNN, hp, bookData[e-1])
 			progressPrint(iterN - printLimit* progVar, printLimit)
 			iterN += 1
 
