@@ -8,6 +8,9 @@ class RNNClass:
 class RNNGradClass:
 	pass
 
+class AdaGradClass:
+	pass
+
 def getData():
 	with open("goblet_book.txt", "r",encoding='utf-8') as f:
 		bookData = f.read()
@@ -41,29 +44,32 @@ def sample(p):
 		summ += p[i]
 		if summ > t:
 			return i
+	print("Should never be here")
 	return K-1
 
-def predict(RNN, n=140):
-	hp = np.zeros((m,1))
+def predict(RNN, hp, xChar, n=200):
+	#hp = np.zeros((m,1))
 	x = np.zeros((K,1))
-	prevXi = 0
+
+	prevXi = charToInd[xChar]
 	x[prevXi] = 1
 	
 	pred = ""
 	for j in range(n):
-		p, hp = fowardPass(RNN, hp, x)
+		p, hp = forwardPass(RNN, hp, x)
 		xi = sample(p)
 		pred += indToChar[xi]
 		x[prevXi] = 0
 		x[xi] = 1
+		prexXi = xi
 	print(pred)
 
-def computeLoss(RNN, X, Y):
-	P, _ = feedForward(RNN, X)
-	error = .0
+def computeLoss(RNN, X, Y, hp):
+	P, h = feedForward(RNN, X, hp)
+	loss = .0
 	for t in range(P.shape[1]):
-		error -= np.log(np.dot(Y[:,t:t+1].T,P[:,t:t+1])).item(0)
-	return error
+		loss -= np.log(np.dot(Y[:,t:t+1].T,P[:,t:t+1])).item(0)
+	return loss, P, h
 
 def forwardPass(RNN, hp, x):
 	a = np.matmul(RNN.W,hp) + np.matmul(RNN.U,x) + RNN.b
@@ -72,8 +78,7 @@ def forwardPass(RNN, hp, x):
 	p = softmax(o)
 	return p, h
 
-def feedForward(RNN, X):
-	hp = np.zeros((m,1))
+def feedForward(RNN, X, hp):
 	hL = np.zeros((m,seqLength+1))
 	pL = np.zeros((K,seqLength))
 	for t in range(X.shape[1]):
@@ -82,7 +87,7 @@ def feedForward(RNN, X):
 		hL[:,t+1:t+2] = hp
 	return pL, hL
 
-def calculateGradient(RNN,X,Y):
+def calculateGradient(RNN,X,Y, hp):
 
 	RNNGrad = RNNGradClass()
 	RNNGrad.b = np.zeros((m,1))
@@ -92,7 +97,7 @@ def calculateGradient(RNN,X,Y):
 	RNNGrad.V = np.zeros((K,m))
 	RNNGrad.A = np.zeros((m,1))
 
-	p,h = feedForward(RNN, X)
+	loss,p,h = computeLoss(RNN, X, Y, hp)
 
 	for t in reversed(range(X.shape[1])):
 		RNNGrad.o = p[:,t:t+1] - Y[:,t:t+1]
@@ -104,9 +109,9 @@ def calculateGradient(RNN,X,Y):
 		RNNGrad.b += RNNGrad.A
 		RNNGrad.U += np.matmul(RNNGrad.A, X[:,t:t+1].T)
 
-	return RNNGrad
+	return RNNGrad, h[:,-2:-1], loss
 
-def cumputeGradsNum(RNN, X, Y, h = 1e-5):
+def cumputeGradsNum(RNN, X, Y, hp, h = 1e-5):
 
 	RNNGrad = RNNGradClass()
 	RNNGrad.b = np.zeros((m,1))
@@ -121,9 +126,9 @@ def cumputeGradsNum(RNN, X, Y, h = 1e-5):
 	for i in range(RNN.b.shape[0]):
 		RNNTry = copy.deepcopy(RNN)
 		RNNTry.b[i] -= h
-		l1 = computeLoss(RNNTry, X, Y)
+		l1,_,_ = computeLoss(RNNTry, X, Y, hp)
 		RNNTry.b[i] += 2*h
-		l2 = computeLoss(RNNTry, X, Y)
+		l2,_,_ = computeLoss(RNNTry, X, Y, hp)
 		RNNGrad.b[i] = (l2-l1)/(2*h)
 		progIter += 1
 		progressPrint(progIter, progToral)
@@ -131,9 +136,9 @@ def cumputeGradsNum(RNN, X, Y, h = 1e-5):
 	for i in range(RNN.c.shape[0]):
 		RNNTry = copy.deepcopy(RNN)
 		RNNTry.c[i] -= h
-		l1 = computeLoss(RNNTry, X, Y)
+		l1,_,_ = computeLoss(RNNTry, X, Y, hp)
 		RNNTry.c[i] += 2*h
-		l2 = computeLoss(RNNTry, X, Y)
+		l2,_,_ = computeLoss(RNNTry, X, Y, hp)
 		RNNGrad.c[i] = (l2-l1)/(2*h)
 		progIter += 1
 		progressPrint(progIter, progToral)
@@ -142,9 +147,9 @@ def cumputeGradsNum(RNN, X, Y, h = 1e-5):
 		for j in range(RNN.U.shape[1]):
 			RNNTry = copy.deepcopy(RNN)
 			RNNTry.U[i,j] -= h
-			l1 = computeLoss(RNNTry, X, Y)
+			l1,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNTry.U[i,j] += 2*h
-			l2 = computeLoss(RNNTry, X, Y)
+			l2,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNGrad.U[i,j] = (l2-l1)/(2*h)
 			progIter += 1
 			progressPrint(progIter, progToral)
@@ -153,9 +158,9 @@ def cumputeGradsNum(RNN, X, Y, h = 1e-5):
 		for j in range(RNN.W.shape[1]):
 			RNNTry = copy.deepcopy(RNN)
 			RNNTry.W[i,j] -= h
-			l1 = computeLoss(RNNTry, X, Y)
+			l1,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNTry.W[i,j] += 2*h
-			l2 = computeLoss(RNNTry, X, Y)
+			l2,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNGrad.W[i,j] = (l2-l1)/(2*h)
 			progIter += 1
 			progressPrint(progIter, progToral)
@@ -164,9 +169,9 @@ def cumputeGradsNum(RNN, X, Y, h = 1e-5):
 		for j in range(RNN.V.shape[1]):
 			RNNTry = copy.deepcopy(RNN)
 			RNNTry.V[i,j] -= h
-			l1 = computeLoss(RNNTry, X, Y)
+			l1,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNTry.V[i,j] += 2*h
-			l2 = computeLoss(RNNTry, X, Y)
+			l2,_,_ = computeLoss(RNNTry, X, Y, hp)
 			RNNGrad.V[i,j] = (l2-l1)/(2*h)
 			progIter += 1
 			progressPrint(progIter, progToral)
@@ -183,8 +188,9 @@ def checkGradTest():
 	yChars = bookData[1:seqLength+1]
 	X, Y = getInput(xChars, yChars)
 
-	analGrads = calculateGradient(RNN,X,Y)
-	numGrads = cumputeGradsNum(RNN,X,Y)
+	hp = np.zeros((m,1))
+	analGrads,_,_ = calculateGradient(RNN,X,Y, hp)
+	numGrads = cumputeGradsNum(RNN,X,Y,hp)
 
 	bError = np.max(abs(analGrads.b - numGrads.b) / np.clip(abs(analGrads.b) + abs(numGrads.b), a_min=1e-06, a_max=9999))
 	cError = np.max(abs(analGrads.c - numGrads.c) / np.clip(abs(analGrads.c) + abs(numGrads.c), a_min=1e-06, a_max=9999))
@@ -193,7 +199,7 @@ def checkGradTest():
 	VError = np.max(abs(analGrads.V - numGrads.V) / np.clip(abs(analGrads.V) + abs(numGrads.V), a_min=1e-06, a_max=9999))
 
 	print("c = " + str(cError))
-	print("v = " + str(VError))
+	print("V = " + str(VError))
 	print("b = " + str(bError))
 	print("U = " + str(UError))
 	print("W = " + str(WError))
@@ -206,6 +212,13 @@ def getInput(X,Y):
 		yIN[charToInd[Y[i]],i] = 1
 	return xIN, yIN
 
+def clipGrads(RNNGrad):
+	RNNGrad.b = np.clip(RNNGrad.b, -5, 5)
+	RNNGrad.c = np.clip(RNNGrad.c, -5, 5)
+	RNNGrad.U = np.clip(RNNGrad.U, -5, 5)
+	RNNGrad.W = np.clip(RNNGrad.W, -5, 5)
+	RNNGrad.V = np.clip(RNNGrad.V, -5, 5)
+
 def progressPrint(nominator, denominator):
 	denominator = float(denominator)*100
 	nominator = float(nominator)*100
@@ -214,14 +227,69 @@ def progressPrint(nominator, denominator):
 		sys.stdout.write('\r'+ number + "%")
 		sys.stdout.flush()
 
+def fit(RNN, AdaGrad, e, hp):
+	xChars = bookData[e:e+seqLength]
+	yChars = bookData[e+1:e+seqLength+1]
+	xTrain, yTrain = getInput(xChars, yChars)
+	RNNGrads, h, loss = calculateGradient(RNN, xTrain, yTrain, hp)
+	clipGrads(RNNGrads)
+
+	AdaGrad.b += np.power(RNNGrads.b,2)
+	AdaGrad.c += np.power(RNNGrads.c,2)
+	AdaGrad.U += np.power(RNNGrads.U,2)
+	AdaGrad.W += np.power(RNNGrads.W,2)
+	AdaGrad.V += np.power(RNNGrads.V,2)
+
+	RNN.b -= AdaGrad.n*np.divide(RNNGrads.b, np.sqrt(AdaGrad.b + AdaGrad.eps))
+	RNN.c -= AdaGrad.n*np.divide(RNNGrads.c, np.sqrt(AdaGrad.c + AdaGrad.eps))
+	RNN.U -= AdaGrad.n*np.divide(RNNGrads.U, np.sqrt(AdaGrad.U + AdaGrad.eps))
+	RNN.W -= AdaGrad.n*np.divide(RNNGrads.W, np.sqrt(AdaGrad.W + AdaGrad.eps))
+	RNN.V -= AdaGrad.n*np.divide(RNNGrads.V, np.sqrt(AdaGrad.V + AdaGrad.eps))
+
+	return h, loss
+
+def initAdagrad():
+	AdaGrad = AdaGradClass()
+	AdaGrad.b = np.zeros((m,1))
+	AdaGrad.c = np.zeros((K,1))
+	AdaGrad.U = np.zeros((m,K))
+	AdaGrad.W = np.zeros((m,m))
+	AdaGrad.V = np.zeros((K,m))
+
+	AdaGrad.n = 1e-2
+	AdaGrad.eps = 1e-5
+
+	return AdaGrad
+
+def train(RNN, numEpoch):
+	AdaGrad = initAdagrad()
+	iterN = 0
+	smoothLoss = 0.0
+	progVar = -1
+	printLimit = 10000
+
+	for epoch in range(numEpoch):
+		e = 0
+		hp = np.zeros((m,1))
+		while(e + seqLength + 1 < len(bookData)):
+			hp, loss = fit(RNN, AdaGrad, e, hp)
+			smoothLoss = loss if smoothLoss == 0.0 else .999*smoothLoss + .001 * loss
+			e += seqLength
+			if iterN % printLimit == 0:
+				sys.stdout.write("\r     ")
+				sys.stdout.flush()
+				print("")
+				progVar+=1
+				print("------")
+				print("Epoch = " + str(epoch+1) +", Iter = " + str(iterN) + ", Smooth Loss = " + str(smoothLoss))
+				predict(RNN, copy.deepcopy(hp), bookData[e-1])
+			progressPrint(iterN - printLimit* progVar, printLimit)
+			iterN += 1
+
 def test():
 	RNN = initRNN()
-	xChars = bookData[0:seqLength]
-	yChars = bookData[1:seqLength+1]
 
-	xTrain, yTrain = getInput(xChars, yChars)
-	print(computeLoss(RNN,xTrain,yTrain))
-		
+	train(RNN, 10)
 
 m = 100
 eta = .1
@@ -231,6 +299,5 @@ sig = .01
 K, charToInd, indToChar, bookData = getData()
 
 
-
-#test()
-checkGradTest()
+test()
+#checkGradTest()
