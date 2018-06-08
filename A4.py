@@ -38,6 +38,7 @@ def softmax(x):
     return e_x / e_x.sum(axis=0)
 
 def sample(p):
+
 	t = np.random.random()
 	summ = .0
 	for i in range(K):
@@ -53,7 +54,6 @@ def predict(RNN, hp, xChar, n=200):
 
 	prevXi = charToInd[xChar]
 	x[prevXi] = 1
-	
 	pred = ""
 	for j in range(n):
 		p, nhp = forwardPass(RNN, nhp, x)
@@ -61,7 +61,8 @@ def predict(RNN, hp, xChar, n=200):
 		pred += indToChar[xi]
 		x[prevXi] = 0
 		x[xi] = 1
-		prexXi = xi
+		prevXi = xi
+
 	print(pred)
 
 def computeLoss(RNN, X, Y, hp):
@@ -110,7 +111,7 @@ def calculateGradient(RNN,X,Y, hp):
 		RNNGrad.b += RNNGrad.A
 		RNNGrad.U += np.matmul(RNNGrad.A, X[:,t:t+1].T)
 
-	return RNNGrad, h[:,-2:-1], loss
+	return RNNGrad, h[:,-1:], loss
 
 def cumputeGradsNum(RNN, X, Y, hp, h = 1e-5):
 
@@ -282,15 +283,28 @@ def train(RNN, numEpoch):
 				print("")
 				progVar+=1
 				print("------")
-				print("Epoch = " + str(epoch+1) +", Iter = " + str(iterN) + ", Smooth Loss = " + str(smoothLoss))
+				print("Epoch = " + str(epoch+1) +", Iter = " + str(iterN) + ", Smooth Loss = " + str(smoothLoss) + ", Loss = " + str(loss))
 				predict(RNN, hp, bookData[e-1])
+				#with open("lossData", "a") as file:
+					#file.write(str(iterN) + " " str(smoothLoss))
 			progressPrint(iterN - printLimit* progVar, printLimit)
 			iterN += 1
+		if epoch % 10 == 0:
+			print("")
+			print("Type q to exit...")
+			QPressed = input(">")
+			if QPressed == "q":
+				break
 
 def test():
 	RNN = initRNN()
 
-	train(RNN, 10)
+	train(RNN, 1000)
+
+	print("#####################")
+	hp = np.zeros((m,1))
+	predict(RNN, hp, '\n', n=1000)
+	print("#####################")
 
 m = 100
 eta = .1
